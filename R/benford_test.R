@@ -49,7 +49,7 @@
 #' @references Anderson K.M., Dayaratna K., Gonshorowski D., & Miller S.J. (2022). "A New Benford Test for Clustered Data with Applications to American Elections." \emph{Stats}, 5(3), 841-855. https://doi.org/10.3390/stats5030049
 #'
 #' @examples
-#' benford_test(ohio2020, base=3, group_id="county_name", id="precinct", method="chisq")
+#' benford_test(ohio2016, base=3, group_id="county_name", id="precinct", method="chisq")
 benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=NULL, id=NULL, na.rm=TRUE,
                          conf.int=0.90, method=c("chisq", "multinom"),
                          p.adj=c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none"),
