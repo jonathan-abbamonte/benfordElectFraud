@@ -211,18 +211,19 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 # conf.int=0.90
 # method = "chisq"
 # p.adj = "BH"
-# labs <- c("trump"="votes.r", "clinton"="votes.d")
+# labs = c("trump"="votes.r", "clinton"="votes.d")
 # na.rm=TRUE
 #
 #
-# benford_test(x, base=3, group_id="county_name", id="precinct", method="chisq")
 
-# ohio2020 <- df %>%
+# benford_test(x, base=3, group_id="county_name", id="precinct", method="chisq",
+#              labs = c("trump"="votes.r", "clinton"="votes.d"))
+#
+# # ohio2020 <- df %>%
 #   rename(labs)
 
 
 # y <- subset(df, df[,1] == groupVec[1])
-
 
 
 # x <- x[,c(1,2,4,6)]
