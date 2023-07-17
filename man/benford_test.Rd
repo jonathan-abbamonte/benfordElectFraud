@@ -64,6 +64,9 @@ method specified in \code{method}. The group_id, label, test statistic, p-value,
 \description{
 Identify grouped observations that are statically inconsistent with Benford's Law.
 }
+\examples{
+benford_test(ohio2020, base=3, group_id="county_name", id="precinct", method="chisq")
+}
 \references{
 Anderson K.M., Dayaratna K., Gonshorowski D., & Miller S.J. (2022). "A New Benford Test for Clustered Data with Applications to American Elections." \emph{Stats}, 5(3), 841-855. https://doi.org/10.3390/stats5030049
 }

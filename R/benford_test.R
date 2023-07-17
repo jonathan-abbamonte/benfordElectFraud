@@ -49,6 +49,7 @@
 #' @references Anderson K.M., Dayaratna K., Gonshorowski D., & Miller S.J. (2022). "A New Benford Test for Clustered Data with Applications to American Elections." \emph{Stats}, 5(3), 841-855. https://doi.org/10.3390/stats5030049
 #'
 #' @examples
+#' benford_test(ohio2020, base=3, group_id="county_name", id="precinct", method="chisq")
 benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=NULL, id=NULL, na.rm=TRUE,
                          conf.int=0.90, method=c("chisq", "multinom"),
                          p.adj=c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none"),
@@ -56,8 +57,8 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
   df <- x
 
-  if (!(is.character(digit)) | !(digit %in% c('first','second'))) {stop("digit must be either 'first' or 'second' ")}
-  if (digit == 'first') {dgt <- 1} else {dgt <- 2}
+  if (!(is.character(digit[1])) | !(digit[1] %in% c('first','second'))) {stop("digit must be either 'first' or 'second' ")}
+  if (digit[1] == 'first') {dgt <- 1} else {dgt <- 2}
 
   if (!(is.numeric(base))) {stop("must provide base")}
   if (base < 0) {stop("base must be a positive number")}
@@ -67,12 +68,12 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
   if (is.null(group_id)) {stop("must assign column name to group_id")}
   if (is.character(group_id)) {
-    df <- df %>% relocate(group_id)
+    df <- df %>% relocate(all_of(group_id))
   }
 
   if (!is.null(id)) {
     if (is.character(id)) {
-      df <- df %>% relocate(id, .after=all_of(group_id))
+      df <- df %>% relocate(all_of(id), .after=all_of(group_id))
     }
     if (class(as.character(df[,2]))=="character") {
       df[,2] <- as.character(df[,2])
@@ -82,14 +83,14 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
   if (is.null(id)) {
     if (any(is.numeric(df[,-1])) | any(is.character(df[,-1])))
       {warning("numeric values being truncated to zero decimal places and coerced to integer")}
-    if (any(!is.numeric(as.numeric(df[,-1])))) {stop("values cannot be coerced to integer")}
+    #if (any(!is.numeric(as.numeric(df[,-1])))) {stop("values cannot be coerced to integer")}
     df <- df %>% mutate_at(-1, function(z) as.integer(trunc(as.numeric(z))))
     if (any(df[,-1] < 0)) {stop("values must be positive")}
     col_id <- grep(group_id, colnames(df))
   } else {
     if (any(is.numeric(df[,-c(1,2)])) | any(is.character(df[,-c(1,2)])))
       {warning("numeric values being truncated to zero decimal places and coerced to integer")}
-    if (any(!is.numeric(as.numeric(df[,-c(1,2)])))) {stop("values cannot be coerced to integer")}
+    #if (any(!is.numeric(as.numeric(df[,-c(1,2)])))) {stop("values cannot be coerced to integer")}
     df <- df %>% mutate_at(-c(1:2), function(z) as.integer(trunc(as.numeric(z))))
     if (any(df[,-c(1:2)] < 0)) {stop("values must be positive")}
     col_id <- c(grep(group_id, colnames(df)), grep(id, colnames(df)))
@@ -100,6 +101,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
   benford_probs <- benford_distribution(digit=digit[1], base=base)
 
   groupVec <- unique(df[,1])
+  FinalMat <- data.frame(matrix(nrow=0, ncol=6))
   #BaseConvert <- data.frame(matrix(nrow=0, ncol=ncol(df[,-col_id])))
 
   for (i in 1:length(groupVec)) {
@@ -119,9 +121,9 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
       }
 
       if (is.null(labs)) {
-        labs <- colnames(y)
+        labs <- colnames(y[,-col_id])
       } else {
-        y <- y %>% rename(labs)
+        y <- y %>% rename(all_of(labs))
         }
 
       BaseConvert_i <- data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
@@ -139,7 +141,6 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
       #BaseConvert <- rbind(BaseConvert, BaseConvert_i)
       FinalMat0 <- data.frame(matrix(nrow=ncol(y), ncol=6))
-      FinalMat <- data.frame(matrix(nrow=0, ncol=6))
 
       for (h in 1:ncol(y)) {
         Digits[,(h+dgt)] = extract_digit(BaseConvert_i[,h], digit=dgt)
@@ -189,7 +190,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
     FinalMat$pval_adj = p.adjust(FinalMat[,4], method=p.adj[1])
     FinalMat$PostProb = (1 + (pHA/( (pH0)^(1/dim(FinalMat)[1]) )) * (1/exp(FinalMat[,5])) )^-1
-    FinalMat$MinPostProb = 1 / (1 + (-exp(1)*pval_adj*log(pval_adj))^-1)
+    FinalMat$MinPostProb = 1 / (1 + (-exp(1)*FinalMat$pval_adj*log(FinalMat$pval_adj))^-1)
 
   } else {stop("no groups with 10 or more cases. Test cannot be calculated.")}
 
@@ -201,16 +202,20 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
 
 
-digit = "first"
-base = 3
-current_base = 10
-group_id = "county_name"
-id = "precinct"
-len = 100
-conf.int=0.90
-method = "chisq"
-p.adj = "BH"
-labs <- c("trump"="votes.r", "clinton"="votes.d")
+# digit = "first"
+# base = 3
+# current_base = 10
+# group_id = "county_name"
+# id = "precinct"
+# len = 100
+# conf.int=0.90
+# method = "chisq"
+# p.adj = "BH"
+# labs <- c("trump"="votes.r", "clinton"="votes.d")
+# na.rm=TRUE
+#
+#
+# benford_test(x, base=3, group_id="county_name", id="precinct", method="chisq")
 
 # ohio2020 <- df %>%
 #   rename(labs)
