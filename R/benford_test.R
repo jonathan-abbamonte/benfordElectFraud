@@ -1,7 +1,7 @@
 #' Benford's Law Test
 #'
 #'@description
-#'Identify grouped observations that are statically inconsistent with Benford's Law.
+#'Identify grouped observations that are statistically inconsistent with Benford's Law.
 #'
 #'
 #' @param x a data frame or an object coercible to a data frame such as a matrix containing values to test for Benfordness
@@ -53,7 +53,7 @@
 benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=NULL, id=NULL, na.rm=TRUE,
                          conf.int=0.90, method=c("chisq", "multinom"),
                          p.adj=c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none"),
-                         labs=NULL) {
+                         labs=NULL, verbose=0) {
 
   df <- x
 
@@ -75,20 +75,22 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
     if (is.character(id)) {
       df <- df %>% relocate(all_of(id), .after=all_of(group_id))
     }
-    if (class(as.character(df[,2]))=="character") {
-      df[,2] <- as.character(df[,2])
-    } else {stop("id must be a character vector")}
+    if (!class(eval(parse(text=paste0('df$', id))))=="character") {
+      if (class(as.character(df[,2]))=="character") {
+        df[,2] <- as.character(df[,2])
+      } else {stop("id must be a character vector")}
+    }
   }
 
   if (is.null(id)) {
-    if (any(is.numeric(df[,-1])) | any(is.character(df[,-1])))
+    if ((any(is.numeric(df[,-1])) | any(is.character(df[,-1]))) & verbose==1)
       {warning("numeric values being truncated to zero decimal places and coerced to integer")}
     #if (any(!is.numeric(as.numeric(df[,-1])))) {stop("values cannot be coerced to integer")}
     df <- df %>% mutate_at(-1, function(z) as.integer(trunc(as.numeric(z))))
     if (any(df[,-1] < 0)) {stop("values must be positive")}
     col_id <- grep(group_id, colnames(df))
   } else {
-    if (any(is.numeric(df[,-c(1,2)])) | any(is.character(df[,-c(1,2)])))
+    if ((any(is.numeric(df[,-c(1,2)])) | any(is.character(df[,-c(1,2)]))) & verbose==1)
       {warning("numeric values being truncated to zero decimal places and coerced to integer")}
     #if (any(!is.numeric(as.numeric(df[,-c(1,2)])))) {stop("values cannot be coerced to integer")}
     df <- df %>% mutate_at(-c(1:2), function(z) as.integer(trunc(as.numeric(z))))
@@ -100,7 +102,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
   pHA = 1 - pH0 ##
   benford_probs <- benford_distribution(digit=digit[1], base=base)
 
-  groupVec <- unique(df[,1])
+  groupVec <- as.vector(unlist(unique(df[,1])))
   FinalMat <- data.frame(matrix(nrow=0, ncol=6))
   #BaseConvert <- data.frame(matrix(nrow=0, ncol=ncol(df[,-col_id])))
 
@@ -116,15 +118,11 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
       } else if (any(is.na(y))) {stop("Data frame cannot have missing values. Remove or select na.rm=TRUE")}
 
       if (any(y==0)) {
-        warning("All values must be greater than 0. Dropping cases with zeros.")
+        if (verbose==1) {warning("All values must be greater than 0. Dropping cases with zeros.")}
         y <- y %>% filter_all(all_vars(. > 0))
       }
 
-      if (is.null(labs)) {
-        labs <- colnames(y[,-col_id])
-      } else {
-        y <- y %>% rename(all_of(labs))
-        }
+      if (!is.null(labs)) {y <- y %>% rename(all_of(labs))}
 
       BaseConvert_i <- data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
       Digits = data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
@@ -132,7 +130,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
       for (j in 1:ncol(y)) {
         for (k in 1:nrow(y)) {
-          BaseConvert_i[k,j] <- as.integer(dec2base(y[k,j], base=base, len=len))
+          BaseConvert_i[k,j] <- as.integer(dec2base(as.integer(y[k,j]), base=base, len=len))
         }
 
         if (any(BaseConvert_i[,j] == 0))
@@ -202,6 +200,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
 
 
+# x <- state
 # digit = "first"
 # base = 3
 # current_base = 10
@@ -213,7 +212,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 # p.adj = "BH"
 # labs = c("trump"="votes.r", "clinton"="votes.d")
 # na.rm=TRUE
-#
+
 #
 
 # benford_test(x, base=3, group_id="county_name", id="precinct", method="chisq",
