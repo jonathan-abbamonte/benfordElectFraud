@@ -51,7 +51,7 @@
 #' @examples
 #' benford_test(ohio2016, base=3, group_id="county_name", id="precinct", method="chisq")
 benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=NULL, id=NULL, na.rm=TRUE,
-                         conf.int=0.90, method=c("chisq", "multinom"),
+                         conf.int=0.95, method=c("chisq", "multinom"),
                          p.adj=c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none"),
                          labs=NULL, verbose=0) {
 
@@ -141,12 +141,12 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
       FinalMat0 <- data.frame(matrix(nrow=ncol(y), ncol=6))
 
       for (h in 1:ncol(y)) {
-        Digits[,(h+dgt)] = extract_digit(BaseConvert_i[,h], digit=dgt)
+        Digits[,h] = extract_digit(BaseConvert_i[,h], digit=dgt)
 
-        Obs <- rep(0, times=base-2+dgt)
-        names(Obs) <- seq(from=(2-dgt), to=(base-2+dgt))
-        for (k in (2-dgt):length(Obs)) {
-            Obs[k] = length(which(Digits[,(h+dgt)]==k))
+        Obs <- rep(0, times=length(benford_probs))
+        names(Obs) <- names(benford_probs)
+        for (g in (2-dgt):length(Obs)) {
+            Obs[g] = length(which(Digits[,h]==g))
           }
 
 
@@ -192,7 +192,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
   } else {stop("no groups with 10 or more cases. Test cannot be calculated.")}
 
-  result <- subset(FinalMat, (FinalMat$PostProb < (1 - conf.int) ))
+  result <- subset(FinalMat, (FinalMat$pval_adj < (1 - conf.int) ))
 
   return(result)
 
@@ -201,13 +201,13 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
 
 # x <- state
-# digit = "first"
-# base = 3
+# digit = "second"
+# base = 10
 # current_base = 10
 # group_id = "county_name"
 # id = "precinct"
 # len = 100
-# conf.int=0.90
+# conf.int=0.95
 # method = "chisq"
 # p.adj = "BH"
 # labs = c("trump"="votes.r", "clinton"="votes.d")
