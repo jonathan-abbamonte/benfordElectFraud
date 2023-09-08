@@ -12,10 +12,11 @@ benford_test(
   group_id = NULL,
   id = NULL,
   na.rm = TRUE,
-  conf.int = 0.9,
+  conf.int = 0.95,
   method = c("chisq", "multinom"),
   p.adj = c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none"),
-  labs = NULL
+  labs = NULL,
+  verbose = 0
 )
 }
 \arguments{
@@ -62,7 +63,7 @@ expected counts predicted by Benford's Law at the confidence level set in \code{
 method specified in \code{method}. The group_id, label, test statistic, p-value, and group size are reported in the output.
 }
 \description{
-Identify grouped observations that are statically inconsistent with Benford's Law.
+Identify grouped observations that are statistically inconsistent with Benford's Law.
 }
 \examples{
 benford_test(ohio2016, base=3, group_id="county_name", id="precinct", method="chisq")
