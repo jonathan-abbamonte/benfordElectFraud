@@ -3,4 +3,6 @@
 export(Benford_calc)
 export(benford_distribution)
 export(benford_test)
+export(d.weibull)
 export(extract_digit)
+export(rd.weibull)

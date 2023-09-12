@@ -122,6 +122,11 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
         y <- y %>% filter_all(all_vars(. > 0))
       }
 
+      if (digit[1] == 'second') {
+        if (verbose==1) {warning("All values must have 2 digits or more. Dropping ids where at least one observation has less than 2 digits.")}
+        y <- y %>% filter_all(all_vars(nchar(.) > 1))
+      }
+
       if (!is.null(labs)) {y <- y %>% rename(all_of(labs))}
 
       BaseConvert_i <- data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
@@ -136,6 +141,14 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
         if (any(BaseConvert_i[,j] == 0))
         {stop("Set len param higher. Nonzero values being converted to numbers with all zeros.")}
       }
+
+      # data_vec <- BaseConvert_i[,j]
+      # if (digit[1] == 'second') {
+      #   if (any(nchar(BaseConvert_i[,j]) < 2)) {
+      #     if (verbose==1) {warning("All values must have 2 digits or more. Dropping cases with less than 2 digits.")}
+      #   }
+      #   data_vec <- data_vec[nchar(data_vec) > 1]
+      # }
 
       #BaseConvert <- rbind(BaseConvert, BaseConvert_i)
       FinalMat0 <- data.frame(matrix(nrow=ncol(y), ncol=6))
@@ -194,6 +207,156 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
   result <- subset(FinalMat, (FinalMat$pval_adj < (1 - conf.int) ))
 
+
+
+  # source("d.weibull.R")
+  # source("rd.weibull.R")
+
+
+  anom_counties <- FinalMat %>%
+    dplyr::select(Group_ID, Label)
+
+
+  df2 <- df %>% filter(county_name %in% anom_counties$Group_ID)
+  bf_valid_test <- data.frame(matrix(nrow=nrow(anom_counties), ncol=ncol(anom_counties)))
+
+  NumSims = 100 #*****
+  SimSize = 25 #*****
+
+  for (z in 1:nrow(anom_counties)) {
+    cty_df <- df2 %>%
+      rename(group_id = all_of(group_id)) %>%
+      filter(group_id == anom_counties[z,1])
+
+    if (!is.null(id)) {
+      cty_df <- cty_df %>%
+        rename(id = all_of(id)) %>%
+        dplyr::select(group_id, id, anom_counties[z,2]) %>%
+        group_by(id) %>%
+        #filter(!grepl("ABS", mode, ignore.case=TRUE)) %>%
+        filter(!grepl("TRANSFER", id, ignore.case=TRUE)) %>%
+        ungroup() %>%
+        group_by(group_id, id) %>%
+        summarise_all(sum, na.rm=TRUE) %>%
+        ungroup()
+    } else {
+      cty_df <- cty_df %>%
+        dplyr::select(group_id, anom_counties[i,2])
+    }
+
+    cty_df <- cty_df[complete.cases(cty_df),]
+
+    if (any(cty_df==0)) {
+      if (verbose==1) {warning("All values must be greater than 0. Dropping cases with zeros.")}
+      cty_df <- cty_df %>% filter_all(all_vars(. > 0))
+    }
+
+
+    if (!is.null(id)) {start_idx <- 3} else {start_idx <- 2}
+
+    datavec <- as.numeric(unlist(cty_df[,start_idx]))
+    datavec <- datavec[!is.na(datavec)]
+
+    if (digit[1] == 'second') {
+      if (any(nchar(datavec) < 2)) {
+        if (verbose==1) {warning("All values must have 2 digits or more. Dropping cases with less than 2 digits.")}
+      }
+      datavec <- datavec[nchar(datavec) > 1]
+    }
+
+    n_precincts <- length(datavec)
+
+
+    ###########################
+    # Estimate Parameters
+    ###########################
+    if (length(datavec) > 1) {
+
+      #source("lldweibull_Kevin.R")
+      #-----------------------------------------------------------------------------------------
+      loglike <- function(p) -sum(log(d.weibull(datavec, p[1], p[2])))
+      mle <- optim(c(2000,2), loglike, control=list(maxit=1e5))  # NB: Changed the initial value for alpha #********
+
+      ks_pval <- rep(0, NumSims)
+      simvec <- list()
+
+      for (k in 1:NumSims) {
+        simvec[[k]] = rd.weibull(n_precincts, abs(mle$par[1]), abs(mle$par[2]))
+        ks_result = ks.test(datavec, simvec[[k]])
+        ks_pval[k] = ks_result$p.value
+      }
+
+      ks_pval_avg = mean(ks_pval)
+      #---------------------------------------------------------------------------------------------
+
+    } else {
+      mle <- list(list(par=c(NA, NA), convergence=NA))
+      ks_pval_avg = NA
+    }
+
+
+    ##################################################################
+    # Test MLE of Individual-Level Discrete Weibull for Benfordness
+    ##################################################################
+    Sim_idx <- sort(sample(1:NumSims, size=SimSize, replace=FALSE))
+    BF_pval <- c()
+
+    for (v in 1:SimSize) {
+      BaseConvert_i <- c()
+      Digits = c()
+      n_obs <- length(simvec[[Sim_idx[v]]])
+      Exp = benford_probs * n_obs
+
+      for (l in 1:n_obs) {
+        BaseConvert_i[l] <- as.integer(dec2base(as.integer(simvec[[Sim_idx[v]]][l]), base=base, len=len))
+      }
+
+      BaseConvert_i <- BaseConvert_i[BaseConvert_i > 0]
+
+      if (digit[1]=="second") {
+        BaseConvert_i <- BaseConvert_i[BaseConvert_i > 9]
+      }
+
+      Digits = extract_digit(BaseConvert_i, digit=dgt)
+
+      Obs <- rep(0, times=length(benford_probs))
+      names(Obs) <- names(benford_probs)
+      for (g in (2-dgt):length(Obs)) {
+        Obs[g] = length(which(Digits==g))
+      }
+
+      if (method == "chisq") {
+        test_stat = sum( (Obs - Exp)^2 / Exp )
+        BF_pval[v] = pchisq(test_stat, df=base-3+dgt, lower.tail=FALSE)
+
+      } else if (method == "multinom") {
+        obs_probs <- Obs / n_obs
+        test_stat = -2 * sum( Obs[obs_probs!=0]*log(benford_probs[obs_probs!=0]/obs_probs[obs_probs!=0]) )
+        cor_test_stat = test_stat / (1 + base/(6*n_obs) + ((base-1)^2)/(6*n_obs^2) ) # Smith (1981)
+        BF_pval[v] = pchisq(cor_test_stat, df=base-3+dgt, lower.tail=FALSE)
+      }
+    }
+
+    BF_pval_avg = mean(BF_pval)
+
+    bf_valid_test[z,1:2] <- anom_counties[z,]
+    bf_valid_test[z,3]   <- mle$par[1]
+    bf_valid_test[z,4]   <- mle$par[2]
+    bf_valid_test[z,5]   <- n_precincts
+    bf_valid_test[z,6]   <- ks_pval_avg
+    bf_valid_test[z,7]   <- BF_pval_avg
+  }
+
+  colnames(bf_valid_test) <- c('Group_ID', 'Label', 'Scale', 'Shape', 'nobs', 'KS_pval', 'BF_pval')
+
+  bf_valid_test$BF_adj_pval <- p.adjust(bf_valid_test[,7], method=p.adj[1])
+
+  bf_valid_test$conformity <- ifelse(bf_valid_test$BF_adj_pval > 0.05, '*', '')
+
+
+  result <- result %>%
+    left_join(bf_valid_test, by=c("Group_ID", "Label"))
+
   return(result)
 
 }
@@ -212,6 +375,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 # p.adj = "BH"
 # labs = c("trump"="votes.r", "clinton"="votes.d")
 # na.rm=TRUE
+# verbose = 1
 
 #
 
