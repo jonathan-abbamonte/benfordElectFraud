@@ -4,65 +4,79 @@
 #'Identify grouped observations that are statistically inconsistent with Benford's Law.
 #'
 #'
-#' @param x a data frame or an object coercible to a data frame such as a matrix containing values to test for Benfordness
+#' @param x A data frame or an object coercible to a data frame such as a matrix containing values to test for Benfordness
 #' and column corresponding to group names. Each column pertains to a response. Columns must contain only positive values.
 #' Decimal values will be truncated to zero decimal places and coerced to integer.
 #'
-#' @param digit a string corresponding to the digit of the values in x to test for Benfordness.
-#' User can select either \code{"first"} or \code{"second"}.
+#' @param digit A string corresponding to the digit of the values in x to test for Benfordness.
+#' User can select either \code{"first"}, \code{"second"}, or \code{"last two"}. If \code{"second"} or \code{"last two"},
+#' values with less than 2 digits will automatically be dropped.Currently, only base 10 is supported for option \code{"last two"}.
 #'
-#' @param base the target base to convert all non-negative integer values in x to. Must be 3 or greater. Required.
+#' @param base The target base to convert all non-negative integer values in x to. Must be 3 or greater. Required.
 #'
-#' @param len the length of the character string used to convert numerals in base 10 to another base.
+#' @param group_id A character variable to group Benford's test on. Groups must contain a minimum of 10 observations.
+#' Any group with fewer than 10 observations will be excluded. Observations within groups will
+#' be tested for Benfordness using the test specified in \code{method}. Required.
+#'
+#' @param id A character vector specifying the id for observations.
+#'
+#' @param method Method used to calculate the test statistic and p-value for the Benford's Law test. User can
+#' select "chisq" to compute using Pearson's Chi-Square test or "multinom" to compute using a multinomial likelihood
+#' ratio test.
+#'
+#' @param n.sims Number of Monte Carlo simulations to run for testing group-wise data conformity with discrete weibull
+#' distribution and Benford's Law.
+#'
+#' @param conf.level Confidence level for the test selected in method. Default is \code{conf.level=0.95}.
+#'
+#' @param p.adj String specifying method for calculating adjusted p-value for multiple comparisons.
+#' Function calls \code{stats::p.adjust}. Default method for is Benjamini & Hochberg (1995) ("BH") but any method
+#' can be selected. See \code{?stats::p.adjust} for options.
+#'
+#' @param na.rm How to handle missing values and zeros. If \code{na.rm=TRUE}, NAs and zeros will be
+#' excluded from analysis. If \code{na.rm=FALSE} then the user must first remove NAs but observations
+#' with zeros will be automatically dropped.
+#'
+#' @param labs Named vector of labels to apply to each column in x. If no named vector is given, the names of the columns of x
+#' (other than the column(s) assigned to group_id and id) are used as labels in the output.
+#'
+#' @param len The length of the character string used to convert numerals in base 10 to another base.
 #' Function calls \code{oro.dicom:dec2base}. It is highly recommended to set the \code{len} > 100 as
 #' there is a bug in \code{dec2base} which sets some values with leading 1's to '0'.
 #' A higher \code{len} may be required for data with values of higher magnitude.
 #'
-#' @param group_id a character variable to group Benford's test on. Groups must contain a minimum of 10 observations.
-#' Any group with fewer than 10 observations will be excluded. Observations within groups will
-#' be tested for Benfordness using the test specified in \code{method}. Required.
+#' @param verbose \code{verbose=1} prints warnings while \code{verbose=0} silences them.
 #'
-#' @param id a character vector specifying the id for observations.
 #'
-#' @param conf.int confidence level for the test selected in method. Default is \code{conf.int=0.90}.
-#'
-#' @param method method used to calculate the test statistic and p-value for the Benford's Law test. User can
-#' select "chisq" to compute using Pearson's Chi-Square test or "multinom" to compute using a multinomial likelihood
-#' ratio test.
-#'
-#' @param p.adj string specifying method for calculating adjusted p-value for multiple comparisons.
-#' Function calls \code{stats::p.adjust}. Default method for is Benjamini & Hochberg (1995) ("BH") but any method
-#' can be selected. See \code{?stats::p.adjust} for options.
-#'
-#' @param na.rm how to handle missing values and zeros. If \code{na.rm=TRUE}, NAs and zeros will be
-#' excluded from analysis. If \code{na.rm=FALSE} then the user must remove NAs \code{x} and observations
-#' with zeros will be automatically dropped with a warning.
-#'
-#' @param labs named vector of labels to apply to each column in x. If no named vector is given, the names of the columns of x
-#' (other than the column(s) assigned to group_id and id) are used as labels in the output.
-#'
-#' @return a data frame showing all grouped observations that are statistically different from the
-#' expected counts predicted by Benford's Law at the confidence level set in \code{conf.int} and calculated using the
+#' @return A data frame showing all grouped observations that are statistically different from the
+#' expected counts predicted by Benford's Law at the confidence level set in \code{conf.level} and calculated using the
 #' method specified in \code{method}. The group_id, label, test statistic, p-value, and group size are reported in the output.
 #'
+#' @import dplyr
+#' @import oro.dicom
+#'
 #' @export
-#' @references Anderson K.M., Dayaratna K., Gonshorowski D., & Miller S.J. (2022). "A New Benford Test for Clustered Data with Applications to American Elections." \emph{Stats}, 5(3), 841-855. https://doi.org/10.3390/stats5030049
+#'
+#' @references Anderson K.M., Dayaratna K., Gonshorowski D., & Miller S.J. (2022). "A New Benford Test for Clustered Data with Applications to American Elections." \emph{Stats}, 5(3), 841-855. https://doi.org/10.3390/stats5030049.
+#' @references Smith PJ, Rae DS, Manderscheid RW, Silbergeld S. Approximating the moments and distribution of the likelihood ratio statistic for multinomial goodness of fit. Journal of the American Statistical Association. 1981 Sep 1;76(375):737-40.
 #'
 #' @examples
 #' benford_test(ohio2016, base=3, group_id="county_name", id="precinct", method="chisq")
-benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=NULL, id=NULL, na.rm=TRUE,
-                         conf.int=0.95, method=c("chisq", "multinom"),
+#'
+benford_test <- function(x, digit=c("first", "second", "last two"), base, group_id=NULL, id=NULL, na.rm=TRUE,
+                         method=c("chisq", "multinom"), n.sims=100, conf.level=0.95,
                          p.adj=c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none"),
-                         labs=NULL, verbose=0) {
+                         labs=NULL, len=100, verbose=0) {
 
   df <- x
 
-  if (!(is.character(digit[1])) | !(digit[1] %in% c('first','second'))) {stop("digit must be either 'first' or 'second' ")}
+  if (!(is.character(digit[1])) | !(digit[1] %in% c('first','second','last two'))) {stop("digit must be either 'first', 'second', or 'last two' ")}
   if (digit[1] == 'first') {dgt <- 1} else {dgt <- 2}
 
   if (!(is.numeric(base))) {stop("must provide base")}
   if (base < 0) {stop("base must be a positive number")}
   if (base < 3) {stop("base must be 3 or greater")}
+  if (digit[1]=='last two') {if (base!=10) {stop("Only base 10 is currently supported for the last two digits")}}
 
   if (!is.data.frame(df)) {try(df <- as.data.frame(df))}
 
@@ -100,11 +114,16 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
   pH0 = 0.5     ##
   pHA = 1 - pH0 ##
-  benford_probs <- benford_distribution(digit=digit[1], base=base)
+
+  if (digit[1] %in% c('first','second')) {
+    benford_probs <- benford_distribution(digit=digit[1], base=base)
+  } else if (digit[1]=='last two') {
+    benford_probs <- c(10/99, 89/99)
+    names(benford_probs) <- c('A', 'N')
+  }
 
   groupVec <- as.vector(unlist(unique(df[,1])))
   FinalMat <- data.frame(matrix(nrow=0, ncol=6))
-  #BaseConvert <- data.frame(matrix(nrow=0, ncol=ncol(df[,-col_id])))
 
   for (i in 1:length(groupVec)) {
     y <- subset(df, df[,1] == groupVec[i])
@@ -122,7 +141,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
         y <- y %>% filter_all(all_vars(. > 0))
       }
 
-      if (digit[1] == 'second') {
+      if (digit[1] %in% c('second','last two')) {
         if (verbose==1) {warning("All values must have 2 digits or more. Dropping ids where at least one observation has less than 2 digits.")}
         y <- y %>% filter_all(all_vars(nchar(.) > 1))
       }
@@ -131,7 +150,9 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 
       BaseConvert_i <- data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
       Digits = data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
-      Exp = benford_probs * nrow(y)
+
+      Exp = diff(c(0, round(cumsum(benford_probs * nrow(y)))))   #### Should we round expected values?
+      if (sum(Exp) != nrow(y)) {stop("Sum of rounded expected values from Benford's disribution not equal to length of group_id")}
 
       for (j in 1:ncol(y)) {
         for (k in 1:nrow(y)) {
@@ -142,35 +163,39 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
         {stop("Set len param higher. Nonzero values being converted to numbers with all zeros.")}
       }
 
-      # data_vec <- BaseConvert_i[,j]
-      # if (digit[1] == 'second') {
-      #   if (any(nchar(BaseConvert_i[,j]) < 2)) {
-      #     if (verbose==1) {warning("All values must have 2 digits or more. Dropping cases with less than 2 digits.")}
-      #   }
-      #   data_vec <- data_vec[nchar(data_vec) > 1]
-      # }
 
-      #BaseConvert <- rbind(BaseConvert, BaseConvert_i)
       FinalMat0 <- data.frame(matrix(nrow=ncol(y), ncol=6))
 
       for (h in 1:ncol(y)) {
-        Digits[,h] = extract_digit(BaseConvert_i[,h], digit=dgt)
+        if (digit[1] %in% c('first','second')) {
+          Digits[,h] = extract_digit(BaseConvert_i[,h], digit=dgt)
+        } else if (digit[1]=='last two') {
+          Digits[,h] = extract_digit(BaseConvert_i[,h], number.of.digits=2, last=TRUE)
+        }
 
         Obs <- rep(0, times=length(benford_probs))
         names(Obs) <- names(benford_probs)
-        for (g in (2-dgt):length(Obs)) {
-            Obs[g] = length(which(Digits[,h]==g))
-          }
+
+        if (digit[1] %in% c('first','second')) {
+          for (g in (2-dgt):length(Obs)) {
+            Obs[g] = length(which(Digits[,h]==g))}
+        } else if (digit[1]=='last two') {
+            Obs[1] = length(which(Digits[,h] %in% c(0, seq(11, 99, by=11))))
+            Obs[2] = length(Digits[,h]) - Obs[1]
+        }
+
+        if (digit[1] %in% c('first','second')) {dgts <- dgt} else if (digit[1]=='last two') {dgts = -base + 4}
 
 
         if (method == "chisq") {
           test_stat = sum( (Obs - Exp)^2 / Exp )
-          pval = pchisq(test_stat, df=base-3+dgt, lower.tail=FALSE)
+          pval = stats::pchisq(test_stat, df=base-3+dgts, lower.tail=FALSE)
         } else if (method == "multinom") {
           obs_probs <- Obs / nrow(y)
-          test_stat = -2 * sum( Obs[obs_probs!=0]*log(benford_probs[obs_probs!=0]/obs_probs[obs_probs!=0]) )
-          cor_test_stat = test_stat / (1 + base/(6*nrow(y)) + ((base-1)^2)/(6*nrow(y)^2) ) # Smith (1981)
-          pval = pchisq(cor_test_stat, df=base-3+dgt, lower.tail=FALSE)
+          test_stat <- 2 * sum(Obs[Obs!=0] * log(Obs[Obs!=0] / (nrow(y)*benford_probs[Obs!=0])))
+          pval = stats::pchisq(test_stat, df=base-3+dgts, lower.tail=FALSE)
+
+          # cor_test_stat = test_stat / (1 + base/(6*nrow(y)) + ((base-1)^2)/(6*nrow(y)^2) ) # Smith (1981)
 
           # library(XNomial)
           # if (nrow(y) > 100) {
@@ -183,7 +208,7 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
                           x = Obs,
                           alpha = rep(1,length(Exp)))
 
-        FinalMat0[ ,1] = groupVec[i]
+        FinalMat0[h,1] = groupVec[i]
         FinalMat0[h,2] = colnames(y)[h]
         FinalMat0[h,3] = test_stat
         FinalMat0[h,4] = pval
@@ -199,39 +224,38 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
   if (nrow(FinalMat) > 0) {
     names(FinalMat) <- c("Group_ID", "Label", "Test.Statistic", "p.val", "BF", "n")
 
-    FinalMat$pval_adj = p.adjust(FinalMat[,4], method=p.adj[1])
+    FinalMat$pval_adj = stats::p.adjust(FinalMat[,4], method=p.adj[1])
     FinalMat$PostProb = (1 + (pHA/( (pH0)^(1/dim(FinalMat)[1]) )) * (1/exp(FinalMat[,5])) )^-1
     FinalMat$MinPostProb = 1 / (1 + (-exp(1)*FinalMat$pval_adj*log(FinalMat$pval_adj))^-1)
 
   } else {stop("no groups with 10 or more cases. Test cannot be calculated.")}
 
-  result <- subset(FinalMat, (FinalMat$pval_adj < (1 - conf.int) ))
+  result <- subset(FinalMat, (FinalMat$pval_adj < (1 - conf.level) ))
 
 
 
-  # source("d.weibull.R")
-  # source("rd.weibull.R")
 
-
-  anom_counties <- FinalMat %>%
+  anom_counties <- result %>%
     dplyr::select(Group_ID, Label)
 
+  df2 <- df %>% filter(eval(parse(text=group_id)) %in% anom_counties$Group_ID)
+  bf_valid_test <- data.frame(matrix(nrow=0, ncol=7,
+                                     dimnames = list(NULL,
+                                                     c('Group_ID', 'Label', 'Scale', 'Shape', 'N', 'D.weibull_KS_pval', 'BF_pval'))))
+  bf_valid_test[,1:2] <- lapply(bf_valid_test[,1:2], as.character)
+  bf_valid_test[,3:7] <- lapply(bf_valid_test[,1:2], as.numeric)
 
-  df2 <- df %>% filter(county_name %in% anom_counties$Group_ID)
-  bf_valid_test <- data.frame(matrix(nrow=nrow(anom_counties), ncol=ncol(anom_counties)))
 
-  NumSims = 100 #*****
-  SimSize = 25 #*****
+  for (z in 1:length(unique(anom_counties$Group_ID))) {
+    group_id_i <- unique(anom_counties$Group_ID)[z]
 
-  for (z in 1:nrow(anom_counties)) {
     cty_df <- df2 %>%
       rename(group_id = all_of(group_id)) %>%
-      filter(group_id == anom_counties[z,1])
+      filter(group_id == group_id_i)
 
     if (!is.null(id)) {
       cty_df <- cty_df %>%
         rename(id = all_of(id)) %>%
-        dplyr::select(group_id, id, anom_counties[z,2]) %>%
         group_by(id) %>%
         #filter(!grepl("ABS", mode, ignore.case=TRUE)) %>%
         filter(!grepl("TRANSFER", id, ignore.case=TRUE)) %>%
@@ -239,120 +263,138 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
         group_by(group_id, id) %>%
         summarise_all(sum, na.rm=TRUE) %>%
         ungroup()
-    } else {
-      cty_df <- cty_df %>%
-        dplyr::select(group_id, anom_counties[i,2])
     }
 
-    cty_df <- cty_df[complete.cases(cty_df),]
+    for (w in 2:(ncol(df2)-1)) {
 
-    if (any(cty_df==0)) {
-      if (verbose==1) {warning("All values must be greater than 0. Dropping cases with zeros.")}
-      cty_df <- cty_df %>% filter_all(all_vars(. > 0))
+      if (!is.null(id)) {
+        cty_df_i <- cty_df %>%
+          dplyr::select(group_id, id, w+1)
+      } else {
+        cty_df_i <- cty_df %>%
+          dplyr::select(group_id, w)
+      }
+
+      cty_df_i <- cty_df_i[complete.cases(cty_df_i),]
+
+      if (any(cty_df_i==0)) {
+        if (verbose==1) {warning("All values must be greater than 0. Dropping cases with zeros.")}
+        cty_df_i <- cty_df_i %>% filter_all(all_vars(. > 0))
+      }
+
+      if (!is.null(id)) {data_idx <- 3} else {data_idx <- 2}
+
+      datavec <- as.numeric(unlist(cty_df_i[,data_idx]))
+      datavec <- datavec[!is.na(datavec)]
+
+      if (digit[1] %in% c('second','last two')) {
+        if (any(nchar(datavec) < 2)) {
+          if (verbose==1) {warning("All values must have 2 digits or more. Dropping cases with less than 2 digits.")}
+        }
+        datavec <- datavec[nchar(datavec) > 1]
+      }
+
+      n_precincts <- length(datavec)
+
+
+      ###########################
+      # Estimate Parameters
+      ###########################
+      if (length(datavec) > 1) {
+
+        #source("lldweibull_Kevin.R")
+        #---------------------------------------------------------------------------------------------
+        loglike <- function(p) suppressWarnings({-sum(log(d.weibull(datavec, p[1], p[2])))})
+        mle <- stats::optim(c(2000,2), loglike, control=list(maxit=1e5))  # NB: Changed the initial value for alpha #********
+
+        ks_pval <- rep(0, n.sims)
+        simvec <- list()
+
+        for (k in 1:n.sims) {
+          simvec[[k]] = rd.weibull(n_precincts, abs(mle$par[1]), abs(mle$par[2]))
+          ks_result = suppressWarnings(stats::ks.test(datavec, simvec[[k]]))
+          ks_pval[k] = ks_result$p.value
+        }
+
+        ks_pval_avg = mean(ks_pval)
+        #---------------------------------------------------------------------------------------------
+
+      } else {
+        mle <- list(par=c(NA, NA), convergence=NA)
+        ks_pval_avg = NA
+      }
+
+
+      ##################################################################
+      # Test MLE of Individual-Level Discrete Weibull for Benfordness
+      ##################################################################
+      if (length(datavec) > 1) {
+        Exp2 = diff(c(0, round(cumsum(benford_probs * n_precincts))))
+        if (sum(Exp2) != n_precincts) {stop("Sum of rounded expected values from Benford's disribution not equal to length of group_id")}
+
+        BF_pval <- c()
+
+        for (v in 1:n.sims) {
+          BaseConvert_2 <- c()
+
+          for (l in 1:n_precincts) {
+            BaseConvert_2[l] <- as.integer(dec2base(as.integer(simvec[[v]][l]), base=base, len=len))
+          }
+
+          BaseConvert_2 <- BaseConvert_2[BaseConvert_2 > 0]
+
+          if (digit[1] %in% c("second","last two")) {
+            BaseConvert_2 <- BaseConvert_2[BaseConvert_2 > 9]
+          }
+
+          if (digit[1] %in% c('first','second')) {
+            Digits_2 = extract_digit(BaseConvert_2, digit=dgt)
+          } else if (digit[1]=='last two') {
+            Digits_2 = extract_digit(BaseConvert_2, number.of.digits=2, last=TRUE)
+          }
+
+          Obs2 <- rep(0, times=length(benford_probs))
+          names(Obs2) <- names(benford_probs)
+
+          if (digit[1] %in% c('first','second')) {
+            for (g in (2-dgt):length(Obs2)) {
+              Obs2[g] = length(which(Digits_2==g))}
+          } else if (digit[1]=='last two') {
+            Obs2[1] = length(which(Digits_2 %in% c(0, seq(11, 99, by=11))))
+            Obs2[2] = length(Digits_2) - Obs2[1]
+          }
+
+
+          if (method == "chisq") {
+            test_stat = sum( (Obs2 - Exp2)^2 / Exp2 )
+            BF_pval[v] = stats::pchisq(test_stat, df=base-3+dgts, lower.tail=FALSE)
+
+          } else if (method == "multinom") {
+            test_stat2 <- 2 * sum(Obs2[Obs2!=0] * log(Obs2[Obs2!=0] / (n_precincts*benford_probs[Obs2!=0])))
+            BF_pval[v] = stats::pchisq(test_stat2, df=base-3+dgts, lower.tail=FALSE)
+
+            # cor_test_stat = test_stat / (1 + base/(6*n_obs) + ((base-1)^2)/(6*n_obs^2) ) # Smith (1981)
+          }
+        }
+
+        BF_pval_avg = mean(BF_pval)
+
+        bf_valid_test_row <- data.frame(Group_ID = group_id_i,
+                                        Label = utils::tail(colnames(cty_df_i), n=1),
+                                        Scale = mle$par[1],
+                                        Shape = mle$par[2],
+                                        N = n_precincts,
+                                        D.weibull_KS_pval = ks_pval_avg,
+                                        BF_pval = BF_pval_avg)
+
+        bf_valid_test <- rbind(bf_valid_test, bf_valid_test_row)
+      }
     }
-
-
-    if (!is.null(id)) {start_idx <- 3} else {start_idx <- 2}
-
-    datavec <- as.numeric(unlist(cty_df[,start_idx]))
-    datavec <- datavec[!is.na(datavec)]
-
-    if (digit[1] == 'second') {
-      if (any(nchar(datavec) < 2)) {
-        if (verbose==1) {warning("All values must have 2 digits or more. Dropping cases with less than 2 digits.")}
-      }
-      datavec <- datavec[nchar(datavec) > 1]
-    }
-
-    n_precincts <- length(datavec)
-
-
-    ###########################
-    # Estimate Parameters
-    ###########################
-    if (length(datavec) > 1) {
-
-      #source("lldweibull_Kevin.R")
-      #-----------------------------------------------------------------------------------------
-      loglike <- function(p) -sum(log(d.weibull(datavec, p[1], p[2])))
-      mle <- optim(c(2000,2), loglike, control=list(maxit=1e5))  # NB: Changed the initial value for alpha #********
-
-      ks_pval <- rep(0, NumSims)
-      simvec <- list()
-
-      for (k in 1:NumSims) {
-        simvec[[k]] = rd.weibull(n_precincts, abs(mle$par[1]), abs(mle$par[2]))
-        ks_result = ks.test(datavec, simvec[[k]])
-        ks_pval[k] = ks_result$p.value
-      }
-
-      ks_pval_avg = mean(ks_pval)
-      #---------------------------------------------------------------------------------------------
-
-    } else {
-      mle <- list(list(par=c(NA, NA), convergence=NA))
-      ks_pval_avg = NA
-    }
-
-
-    ##################################################################
-    # Test MLE of Individual-Level Discrete Weibull for Benfordness
-    ##################################################################
-    Sim_idx <- sort(sample(1:NumSims, size=SimSize, replace=FALSE))
-    BF_pval <- c()
-
-    for (v in 1:SimSize) {
-      BaseConvert_i <- c()
-      Digits = c()
-      n_obs <- length(simvec[[Sim_idx[v]]])
-      Exp = benford_probs * n_obs
-
-      for (l in 1:n_obs) {
-        BaseConvert_i[l] <- as.integer(dec2base(as.integer(simvec[[Sim_idx[v]]][l]), base=base, len=len))
-      }
-
-      BaseConvert_i <- BaseConvert_i[BaseConvert_i > 0]
-
-      if (digit[1]=="second") {
-        BaseConvert_i <- BaseConvert_i[BaseConvert_i > 9]
-      }
-
-      Digits = extract_digit(BaseConvert_i, digit=dgt)
-
-      Obs <- rep(0, times=length(benford_probs))
-      names(Obs) <- names(benford_probs)
-      for (g in (2-dgt):length(Obs)) {
-        Obs[g] = length(which(Digits==g))
-      }
-
-      if (method == "chisq") {
-        test_stat = sum( (Obs - Exp)^2 / Exp )
-        BF_pval[v] = pchisq(test_stat, df=base-3+dgt, lower.tail=FALSE)
-
-      } else if (method == "multinom") {
-        obs_probs <- Obs / n_obs
-        test_stat = -2 * sum( Obs[obs_probs!=0]*log(benford_probs[obs_probs!=0]/obs_probs[obs_probs!=0]) )
-        cor_test_stat = test_stat / (1 + base/(6*n_obs) + ((base-1)^2)/(6*n_obs^2) ) # Smith (1981)
-        BF_pval[v] = pchisq(cor_test_stat, df=base-3+dgt, lower.tail=FALSE)
-      }
-    }
-
-    BF_pval_avg = mean(BF_pval)
-
-    bf_valid_test[z,1:2] <- anom_counties[z,]
-    bf_valid_test[z,3]   <- mle$par[1]
-    bf_valid_test[z,4]   <- mle$par[2]
-    bf_valid_test[z,5]   <- n_precincts
-    bf_valid_test[z,6]   <- ks_pval_avg
-    bf_valid_test[z,7]   <- BF_pval_avg
   }
 
-  colnames(bf_valid_test) <- c('Group_ID', 'Label', 'Scale', 'Shape', 'nobs', 'KS_pval', 'BF_pval')
+  bf_valid_test$BF_adj_pval <- stats::p.adjust(bf_valid_test$BF_pval, method=p.adj[1])
 
-  bf_valid_test$BF_adj_pval <- p.adjust(bf_valid_test[,7], method=p.adj[1])
-
-  bf_valid_test$conformity <- ifelse(bf_valid_test$BF_adj_pval > 0.05, '*', '')
-
+  bf_valid_test$conformity <- ifelse((bf_valid_test$BF_adj_pval > 0.05) & (bf_valid_test$D.weibull_KS_pval > 0.05), '*', '')
 
   result <- result %>%
     left_join(bf_valid_test, by=c("Group_ID", "Label"))
@@ -362,20 +404,25 @@ benford_test <- function(x, digit=c("first", "second"), base, len=100, group_id=
 }
 
 
+# round(bf_valid_test[,7], digits=3)
+# table(round(p.adjust(bf_valid_test[,7], method=p.adj[1]), digits=3))
 
-# x <- state
-# digit = "second"
-# base = 10
-# current_base = 10
+
+#
+# x <- ohio2016
+# digit = "first"
+# base = 4
 # group_id = "county_name"
 # id = "precinct"
 # len = 100
-# conf.int=0.95
+# conf.level=0.95
 # method = "chisq"
+# n.sims=100
 # p.adj = "BH"
-# labs = c("trump"="votes.r", "clinton"="votes.d")
 # na.rm=TRUE
-# verbose = 1
+# verbose = 0
+# labs = NULL
+
 
 #
 

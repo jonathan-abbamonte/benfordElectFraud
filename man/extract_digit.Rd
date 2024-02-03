@@ -4,17 +4,20 @@
 \alias{extract_digit}
 \title{Extract a Digit from a Number}
 \usage{
-extract_digit(x, digit, number.of.digits = 1)
+extract_digit(x, digit, number.of.digits = 1, last = FALSE)
 }
 \arguments{
-\item{x}{a vector of numbers to extract digits from.}
+\item{x}{A vector of numbers to extract digits from.}
 
-\item{digit}{an integer corresponding to the digit of the numbers in x to be extracted.}
+\item{digit}{An integer corresponding to the starting digit of the numbers in x to be extracted.}
 
-\item{number.of.digits}{number of digits to extract. Default is 1.}
+\item{number.of.digits}{Number of digits to extract. Default is 1.}
+
+\item{last}{If \code{TRUE}, function will extract digits from left to right, i.e. starting from the last digit.
+If \code{FALSE} (default), function will extract digits from right to left, i.e. starting from the first digit.}
 }
 \value{
-an integer vector of extracted digits.
+An integer vector of extracted digits.
 }
 \description{
 Extract a digit (or digits) from a vector of numbers.
@@ -23,4 +26,5 @@ Extract a digit (or digits) from a vector of numbers.
 extract_digit(1:20, digit=1)
 extract_digit(90:120, digit=2)
 extract_digit(90:120, digit=1, number.of.digits=2)
+extract_digit(1000:1030, number.of.digits=2, last=TRUE)
 }

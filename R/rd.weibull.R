@@ -13,7 +13,7 @@
 #'
 #' @examples rd.weibull(10, a=5, b=1)
 rd.weibull <- function(n, a, b){
- val_vec = runif(n, 0, 1)
+ val_vec = stats::runif(n, 0, 1)
  vec = a*(-log(1-val_vec))^(1/b)-1
  return(vec)
 }
