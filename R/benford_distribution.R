@@ -20,7 +20,7 @@ benford_distribution <- function(digit="first", base) {
 
   if (digit == "first") {
     for (i in 1:(base-1)) {
-      bf <- append(bf, log(1 + 1/i, base=base))
+      bf <- append(bf, log(1 + (1/i), base=base))
     }
     names(bf) <- seq(1, base-1, 1)
   }
@@ -28,7 +28,7 @@ benford_distribution <- function(digit="first", base) {
     for (i in 0:(base-1)) {
       bfk <- c()
       for (k in 1:(base-1)) {
-        bfk <- append(bfk, log(1 + 1/(base*k + i), base=base))
+        bfk <- append(bfk, log(1 + (1/(base*k + i)), base=base))
       }
       bf[i+1] <- sum(bfk)
     }

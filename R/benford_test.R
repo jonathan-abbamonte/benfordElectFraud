@@ -304,7 +304,7 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
 
         #source("lldweibull_Kevin.R")
         #---------------------------------------------------------------------------------------------
-        loglike <- function(p) suppressWarnings({-sum(log(d.weibull(datavec, p[1], p[2])))})
+        loglike <- function(p) suppressWarnings({-sum(log(dd.weibull(datavec, p[1], p[2])))})
         mle <- stats::optim(c(2000,2), loglike, control=list(maxit=1e5))  # NB: Changed the initial value for alpha #********
 
         ks_pval <- rep(0, n.sims)
@@ -392,9 +392,10 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
     }
   }
 
-  bf_valid_test$BF_adj_pval <- stats::p.adjust(bf_valid_test$BF_pval, method=p.adj[1])
+  bf_valid_test$BF_adj_pval <- stats::p.adjust(bf_valid_test$BF_pval, method=p.adj[1])    ### Adjusted p-value?
+  bf_valid_test$D.weibull_KS_adj_pval <- stats::p.adjust(bf_valid_test$D.weibull_KS_pval, method=p.adj[1])  ### Adjusted p-value?
 
-  bf_valid_test$conformity <- ifelse((bf_valid_test$BF_adj_pval > 0.05) & (bf_valid_test$D.weibull_KS_pval > 0.05), '*', '')
+  bf_valid_test$conformity <- ifelse((bf_valid_test$BF_adj_pval > 0.05) & (bf_valid_test$D.weibull_KS_adj_pval > 0.05), '*', '')  #Which condition to use?
 
   result <- result %>%
     left_join(bf_valid_test, by=c("Group_ID", "Label"))
@@ -409,9 +410,9 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
 
 
 #
-# x <- ohio2016
+# x <- ge2020
 # digit = "first"
-# base = 4
+# base = 3
 # group_id = "county_name"
 # id = "precinct"
 # len = 100

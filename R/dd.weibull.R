@@ -14,8 +14,8 @@
 #' @return A vector of values corresponding to the probability masses of the discrete weibull distribution.
 #' @export
 #'
-#' @examples d.weibull(1:10, a=10, b=1)
-d.weibull <- function(x, a, b) {
+#' @examples dd.weibull(1:10, a=10, b=1)
+dd.weibull <- function(x, a, b) {
 
   val = exp(-(x/a)^b) - exp(-((x+1)/a)^b)
 
