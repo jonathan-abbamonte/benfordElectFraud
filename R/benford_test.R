@@ -63,6 +63,8 @@
 #' @examples
 #' benford_test(ohio2016, base=3, group_id="county_name", id="precinct", method="chisq")
 #'
+#' benford_test(ohio2016, digit='last two', base=10, group_id="county_name", id="precinct", method="chisq")
+#'
 benford_test <- function(x, digit=c("first", "second", "last two"), base, group_id=NULL, id=NULL, na.rm=TRUE,
                          method=c("chisq", "multinom"), n.sims=100, conf.level=0.95,
                          p.adj=c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none"),
