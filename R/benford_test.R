@@ -122,7 +122,7 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
   if (digit[1] %in% c('first','second')) {
     benford_probs <- benford_distribution(digit=digit[1], base=base)
   } else if (digit[1]=='last two') {
-    benford_probs <- c(10/99, 89/99)
+    benford_probs <- c(10/100, 90/100)
     names(benford_probs) <- c('A', 'N')
   }
 
@@ -209,9 +209,9 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
             #   pval = xmulti(Obs, Exp)$pLLR}
           }
 
-          BF = Benford_calc(theta = Exp/sum(Exp),
-                            x = Obs,
-                            alpha = rep(1,length(Exp)))
+          # BF = Benford_calc(theta = Exp/sum(Exp),
+          #                   x = Obs,
+          #                   alpha = rep(1,length(Exp)))
 
           FinalMat0[h,1] = groupVec[i]
           FinalMat0[h,2] = colnames(y)[h]
