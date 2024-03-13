@@ -103,6 +103,7 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
       {warning("numeric values being truncated to zero decimal places and coerced to integer")}
     #if (any(!is.numeric(as.numeric(df[,-1])))) {stop("values cannot be coerced to integer")}
     df <- df %>% mutate_at(-1, function(z) as.integer(trunc(as.numeric(z))))
+    if (any(is.na(df[,-1]))) {stop("values cannot include NAs")}
     if (any(df[,-1] < 0)) {stop("values must be positive")}
     col_id <- grep(group_id, colnames(df))
   } else {
@@ -110,6 +111,7 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
       {warning("numeric values being truncated to zero decimal places and coerced to integer")}
     #if (any(!is.numeric(as.numeric(df[,-c(1,2)])))) {stop("values cannot be coerced to integer")}
     df <- df %>% mutate_at(-c(1:2), function(z) as.integer(trunc(as.numeric(z))))
+    if (any(is.na(df[,-c(1:2)]))) {stop("values cannot include NAs")}
     if (any(df[,-c(1:2)] < 0)) {stop("values must be positive")}
     col_id <- c(grep(group_id, colnames(df)), grep(id, colnames(df)))
   }
@@ -125,7 +127,7 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
   }
 
   groupVec <- as.vector(unlist(unique(df[,1])))
-  FinalMat <- data.frame(matrix(nrow=0, ncol=6))
+  FinalMat <- data.frame(matrix(nrow=0, ncol=5)) #ncol=6 if using BF
 
   for (i in 1:length(groupVec)) {
     y <- subset(df, df[,1] == groupVec[i])
@@ -148,87 +150,88 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
         y <- y %>% filter_all(all_vars(nchar(.) > 1))
       }
 
-      if (!is.null(labs)) {y <- y %>% rename(all_of(labs))}
+      if (nrow(y) > 10) {
+        if (!is.null(labs)) {y <- y %>% rename(all_of(labs))}
 
-      BaseConvert_i <- data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
-      Digits = data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
+        BaseConvert_i <- data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
+        Digits = data.frame(matrix(nrow=nrow(y), ncol=ncol(y)))
 
-      Exp = diff(c(0, round(cumsum(benford_probs * nrow(y)))))   #### Should we round expected values?
-      if (sum(Exp) != nrow(y)) {stop("Sum of rounded expected values from Benford's disribution not equal to length of group_id")}
+        Exp = diff(c(0, round(cumsum(benford_probs * nrow(y)))))   #### Should we round expected values?
+        if (sum(Exp) != nrow(y)) {stop("Sum of rounded expected values from Benford's disribution not equal to length of group_id")}
 
-      for (j in 1:ncol(y)) {
-        for (k in 1:nrow(y)) {
-          BaseConvert_i[k,j] <- as.integer(dec2base(as.integer(y[k,j]), base=base, len=len))
+        for (j in 1:ncol(y)) {
+          for (k in 1:nrow(y)) {
+            BaseConvert_i[k,j] <- as.integer(dec2base(as.integer(y[k,j]), base=base, len=len))
+          }
+
+          if (any(BaseConvert_i[,j] == 0))
+          {stop("Set len param higher. Nonzero values being converted to numbers with all zeros.")}
         }
 
-        if (any(BaseConvert_i[,j] == 0))
-        {stop("Set len param higher. Nonzero values being converted to numbers with all zeros.")}
-      }
 
+        FinalMat0 <- data.frame(matrix(nrow=ncol(y), ncol=5)) #ncol=6 if using BF
 
-      FinalMat0 <- data.frame(matrix(nrow=ncol(y), ncol=6))
+        for (h in 1:ncol(y)) {
+          if (digit[1] %in% c('first','second')) {
+            Digits[,h] = extract_digit(BaseConvert_i[,h], digit=dgt)
+          } else if (digit[1]=='last two') {
+            Digits[,h] = extract_digit(BaseConvert_i[,h], number.of.digits=2, last=TRUE)
+          }
 
-      for (h in 1:ncol(y)) {
-        if (digit[1] %in% c('first','second')) {
-          Digits[,h] = extract_digit(BaseConvert_i[,h], digit=dgt)
-        } else if (digit[1]=='last two') {
-          Digits[,h] = extract_digit(BaseConvert_i[,h], number.of.digits=2, last=TRUE)
-        }
+          Obs <- rep(0, times=length(benford_probs))
+          names(Obs) <- names(benford_probs)
 
-        Obs <- rep(0, times=length(benford_probs))
-        names(Obs) <- names(benford_probs)
-
-        if (digit[1] %in% c('first','second')) {
-          for (g in (2-dgt):length(Obs)) {
-            Obs[g] = length(which(Digits[,h]==g))}
-        } else if (digit[1]=='last two') {
+          if (digit[1] %in% c('first','second')) {
+            for (g in (2-dgt):length(Obs)) {
+              Obs[g] = length(which(Digits[,h]==g))}
+          } else if (digit[1]=='last two') {
             Obs[1] = length(which(Digits[,h] %in% c(0, seq(11, 99, by=11))))
             Obs[2] = length(Digits[,h]) - Obs[1]
+          }
+
+          if (digit[1] %in% c('first','second')) {dgts <- dgt} else if (digit[1]=='last two') {dgts = -base + 4}
+
+
+          if (method == "chisq") {
+            test_stat = sum( (Obs - Exp)^2 / Exp )
+            pval = stats::pchisq(test_stat, df=base-3+dgts, lower.tail=FALSE)
+          } else if (method == "multinom") {
+            obs_probs <- Obs / nrow(y)
+            test_stat <- 2 * sum(Obs[Obs!=0] * log(Obs[Obs!=0] / (nrow(y)*benford_probs[Obs!=0])))
+            pval = stats::pchisq(test_stat, df=base-3+dgts, lower.tail=FALSE)
+
+            # cor_test_stat = test_stat / (1 + base/(6*nrow(y)) + ((base-1)^2)/(6*nrow(y)^2) ) # Smith (1981)
+
+            # library(XNomial)
+            # if (nrow(y) > 100) {
+            #   pval = xmonte(Obs, Exp)$pLLR
+            # } else {
+            #   pval = xmulti(Obs, Exp)$pLLR}
+          }
+
+          BF = Benford_calc(theta = Exp/sum(Exp),
+                            x = Obs,
+                            alpha = rep(1,length(Exp)))
+
+          FinalMat0[h,1] = groupVec[i]
+          FinalMat0[h,2] = colnames(y)[h]
+          FinalMat0[h,3] = test_stat
+          FinalMat0[h,4] = pval
+          FinalMat0[h,5] = nrow(y)
+          # FinalMat0[h,6] = BF
         }
 
-        if (digit[1] %in% c('first','second')) {dgts <- dgt} else if (digit[1]=='last two') {dgts = -base + 4}
-
-
-        if (method == "chisq") {
-          test_stat = sum( (Obs - Exp)^2 / Exp )
-          pval = stats::pchisq(test_stat, df=base-3+dgts, lower.tail=FALSE)
-        } else if (method == "multinom") {
-          obs_probs <- Obs / nrow(y)
-          test_stat <- 2 * sum(Obs[Obs!=0] * log(Obs[Obs!=0] / (nrow(y)*benford_probs[Obs!=0])))
-          pval = stats::pchisq(test_stat, df=base-3+dgts, lower.tail=FALSE)
-
-          # cor_test_stat = test_stat / (1 + base/(6*nrow(y)) + ((base-1)^2)/(6*nrow(y)^2) ) # Smith (1981)
-
-          # library(XNomial)
-          # if (nrow(y) > 100) {
-          #   pval = xmonte(Obs, Exp)$pLLR
-          # } else {
-          #   pval = xmulti(Obs, Exp)$pLLR}
-        }
-
-        BF = Benford_calc(theta = Exp/sum(Exp),
-                          x = Obs,
-                          alpha = rep(1,length(Exp)))
-
-        FinalMat0[h,1] = groupVec[i]
-        FinalMat0[h,2] = colnames(y)[h]
-        FinalMat0[h,3] = test_stat
-        FinalMat0[h,4] = pval
-        FinalMat0[h,5] = BF
-        FinalMat0[h,6] = nrow(y)
-      }
-
-      FinalMat <- FinalMat %>% rbind(FinalMat0)
-    }
+        FinalMat <- FinalMat %>% rbind(FinalMat0)
+      }}
   }
 
 
   if (nrow(FinalMat) > 0) {
-    names(FinalMat) <- c("Group_ID", "Label", "Test.Statistic", "p.val", "BF", "n")
+    names(FinalMat) <- c("Group_ID", "Label", "Test.Statistic", "p.val", "n") #"BF"
 
     FinalMat$pval_adj = stats::p.adjust(FinalMat[,4], method=p.adj[1])
-    FinalMat$PostProb = (1 + (pHA/( (pH0)^(1/dim(FinalMat)[1]) )) * (1/exp(FinalMat[,5])) )^-1
-    FinalMat$MinPostProb = 1 / (1 + (-exp(1)*FinalMat$pval_adj*log(FinalMat$pval_adj))^-1)
+    # FinalMat$PostProb = (1 + (pHA/( (pH0)^(1/dim(FinalMat)[1]) )) * (1/exp(FinalMat[,5])) )^-1
+    # FinalMat$MinPostProb = 1 / (1 + (-exp(1)*FinalMat$pval_adj*log(FinalMat$pval_adj))^-1)
 
   } else {stop("no groups with 10 or more cases. Test cannot be calculated.")}
 
@@ -411,12 +414,12 @@ benford_test <- function(x, digit=c("first", "second", "last two"), base, group_
 # table(round(p.adjust(bf_valid_test[,7], method=p.adj[1]), digits=3))
 
 
-#
-# x <- ge2020
-# digit = "first"
-# base = 3
-# group_id = "county_name"
-# id = "precinct"
+
+# x <- fl.2000[,1:5]
+# digit = "second"
+# base = 10
+# group_id = "COUNTY"
+# id = "PRECINCT"
 # len = 100
 # conf.level=0.95
 # method = "chisq"
