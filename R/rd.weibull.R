@@ -4,7 +4,7 @@
 #' @param a Scale parameter of the discrete weibull distribution. See details.
 #' @param b Shape parameter of the discrete weibull distribution. See details.
 #'
-#'#' @details
+#' @details
 #' For this function, the parameterization for the discrete weibull distribution is:
 #' \deqn{exp[-(\frac{x}{a})^b]-exp[-(\frac{x+1}{a})^b]}
 #'

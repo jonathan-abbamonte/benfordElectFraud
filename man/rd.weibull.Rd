@@ -11,17 +11,17 @@ rd.weibull(n, a, b)
 
 \item{a}{Scale parameter of the discrete weibull distribution. See details.}
 
-\item{b}{Shape parameter of the discrete weibull distribution. See details.
-
-#' @details
-For this function, the parameterization for the discrete weibull distribution is:
-\deqn{exp[-(\frac{x}{a})^b]-exp[-(\frac{x+1}{a})^b]}}
+\item{b}{Shape parameter of the discrete weibull distribution. See details.}
 }
 \value{
 A vector of values corresponding to quantiles from the discrete weibull distribution.
 }
 \description{
 Random Samples from Discrete Weibull Distribution
+}
+\details{
+For this function, the parameterization for the discrete weibull distribution is:
+\deqn{exp[-(\frac{x}{a})^b]-exp[-(\frac{x+1}{a})^b]}
 }
 \examples{
 rd.weibull(10, a=5, b=1)
