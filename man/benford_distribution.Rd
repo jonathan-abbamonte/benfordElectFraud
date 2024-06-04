@@ -4,19 +4,18 @@
 \alias{benford_distribution}
 \title{Distribution of Probabilities Predicted by Benford's Law}
 \usage{
-benford_distribution(digit = "first", base)
+benford_distribution(digit = 1, base = 10)
 }
 \arguments{
-\item{digit}{digit from significand to use for calculating distribution of probabilities. Default is \code{"first"}
-with option to also select \code{"second"}.}
+\item{digit}{digit from significand to use for calculating distribution of probabilities. Default is \code{1}, and any positive integer is accepted.}
 
-\item{base}{the number base to use.}
+\item{base}{the number base to use. Default is \code{10}.}
 }
 \value{
 a vector of probabilities corresponding to each digit.
 }
 \description{
-Compute the distribution expected probabilities for first- or second-digit Benford's Law for any base.
+Compute the distribution expected probabilities for any-digit Benford's Law for any base.
 }
 \examples{
 benford_distribution(base=10)
